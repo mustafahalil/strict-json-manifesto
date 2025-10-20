@@ -3,6 +3,7 @@
 This document specifies the exact rules that implementations following the Strict JSON Manifesto must enforce. These are non-negotiable principles for any tool or library claiming to follow this manifesto.
 
 **Table of Contents**
+- [Language-Agnostic Principles](#language-agnostic-principles)
 - [Rule 1: Numeric Values](#rule-1-numeric-values)
 - [Rule 2: Boolean Values](#rule-2-boolean-values)
 - [Rule 3: String Handling](#rule-3-string-handling)
@@ -20,6 +21,110 @@ This document specifies the exact rules that implementations following the Stric
 - [Rule 15: JSON Compliance](#rule-15-json-compliance)
 - [Rule 16: Data Transmission Format](#rule-16-data-transmission-format)
 
+---
+
+## Language-Agnostic Principles
+
+These rules apply to **any programming language**. The principles are universal and language-independent. Examples in this document use **Java syntax** for consistency, but the same rules apply to TypeScript, Go, C#, Python, Kotlin, and all other languages.
+
+### Key Concept: WHAT vs HOW
+
+Each rule defines **WHAT must be done** (universal principle).  
+**HOW to do it** depends on language-specific capabilities and idioms.
+
+### Multi-Language Examples
+
+**Rule 1: Numeric Values (Wrapper Types)**
+
+| Principle | Java | TypeScript | Go | Python | .NET |
+|-----------|------|------------|----|---------|----|
+| Unquoted numbers | `Integer`, `Long`, `Double` | `number`, `bigint` | `int64`, `float64` | `int`, `float` | `int`, `long`, `decimal` |
+| No scientific notation | Enforce in parser | Enforce in parser | Enforce in parser | Enforce in parser | Enforce in parser |
+| Wrapper types | `Integer` not `int` | Number type | Interface, not primitive | Type hints | Nullable types |
+
+**Rule 2: Boolean Values (Nullable/Wrapper)**
+
+| Language | Correct | Wrong |
+|----------|---------|-------|
+| Java | `Boolean active;` | `boolean active;` |
+| TypeScript | `active: boolean \| null;` | `active: boolean;` |
+| Go | `*bool` or `optional` | `bool` (no null) |
+| Python | `active: bool \| None` | `active: bool` |
+| .NET | `bool?` | `bool` |
+
+**Rule 4: Array Handling (Explicit Declaration)**
+
+| Language | Correct | Wrong |
+|----------|---------|-------|
+| Java | `List<String> tags;` | `String[] tags;` or `ArrayList` |
+| TypeScript | `tags: string[];` or `tags: Array<string>;` | `tags: string \| string[];` |
+| Go | `tags []string` | `tags interface{}` |
+| Python | `tags: List[str]` | `tags: list` (untyped) |
+| .NET | `List<string> tags;` | `object[] tags;` |
+
+**Rule 6: Date/Time Handling (ISO 8601 UTC Only)**
+
+| Language | Correct | Wrong |
+|----------|---------|-------|
+| Java | `Instant timestamp;` | `Date` or `LocalDateTime` |
+| TypeScript | `timestamp: Date;` with ISO input | Custom date parsing |
+| Go | `time.Time` with UTC | Unix timestamp |
+| Python | `datetime.datetime` with UTC | Milliseconds or string formats |
+| .NET | `DateTimeOffset` with UTC | `DateTime` without offset |
+
+### Implementation Pattern
+
+1. **Parse Rule**: Define validation logic (universal)
+2. **Type Mapping**: Choose language-appropriate type
+3. **Enforce**: Add compile-time or runtime checks
+4. **Error**: Fail fast with clear messages
+
+### Example: Implementing Rule 1 (Numeric Values)
+```
+UNIVERSAL RULE: Numbers must be unquoted, use wrapper types
+
+Java Implementation:
+  ✓ private Integer age;     // Wrapper type
+  ✗ private int age;         // Primitive rejected
+  ✗ "age": "25"              // Quoted number rejected
+
+TypeScript Implementation:
+  ✓ age: number;             // Type-safe number
+  ✓ age?: number;            // Optional allowed
+  ✗ age: string;             // String rejected
+  ✗ age: any;                // Any type rejected
+
+Go Implementation:
+  ✓ Age *int64              // Pointer = nullable
+  ✓ Age int64               // Non-null if required
+  ✗ Age interface{}         // Dynamic type rejected
+
+Python Implementation:
+  ✓ age: int | None         // Union with None
+  ✓ age: Optional[int]      // Type hints
+  ✗ age: Any                // Any type rejected
+```
+
+### When Rules Conflict with Language Features
+
+**Principle**: Follow the Strict JSON manifesto spirit, adapt to language idioms.
+
+- **Go has no null** → Use pointers for nullable fields
+- **Python is dynamically typed** → Use type hints + runtime validation
+- **TypeScript has any type** → Avoid it, use strict union types
+- **JavaScript lacks static types** → Use runtime validators (Zod, JSON Schema)
+
+### Reference for Implementers
+
+When building a tool in your language:
+
+1. Read the rule (language-independent principle)
+2. Map to your language's type system
+3. Implement validation at appropriate layer (compile-time or runtime)
+4. Fail fast when rules violated
+5. Provide clear error messages
+
+---
 ---
 
 ## Rule 1: Numeric Values
