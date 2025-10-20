@@ -1,0 +1,63 @@
+{
+  "manifesto": "The Strict JSON Manifesto",
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-20",
+  "totalSignatories": 0,
+  "signatories": [
+    {
+      "id": 1,
+      "name": "Add Your Name Here",
+      "organization": "Your Company (optional)",
+      "role": "Developer / Architect / Lead (optional)",
+      "date": "2025-01-20",
+      "principlesAdopted": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+      "github": "github-username (optional)",
+      "twitter": "@twitter-handle (optional)",
+      "website": "https://example.com (optional)",
+      "statement": "Why you believe in these principles (optional)"
+    }
+  ],
+  "organizations": [
+    {
+      "id": "org-1",
+      "name": "Add Your Organization",
+      "signatories": 1,
+      "since": "2025-01-20",
+      "website": "https://example.com (optional)"
+    }
+  ],
+  "guidelines": {
+    "submission": "To add your signature, open a Pull Request with your information added to the signatories array.",
+    "requirements": [
+      "Name is required",
+      "Organization is optional",
+      "Date must be in YYYY-MM-DD format",
+      "Principles adopted should reference rule numbers (1-16)",
+      "Social media and website are optional"
+    ],
+    "principles": {
+      "1": "Numeric Values",
+      "2": "Boolean Values",
+      "3": "String Handling",
+      "4": "Array Handling",
+      "5": "Null Values",
+      "6": "Date/Time Handling",
+      "7": "Field Mapping",
+      "8": "Type System",
+      "9": "Nested Objects",
+      "10": "Error Handling",
+      "11": "Nesting Depth Limits",
+      "12": "Circular References",
+      "13": "Security",
+      "14": "Performance",
+      "15": "JSON Compliance",
+      "16": "Data Transmission Format"
+    }
+  },
+  "tiers": {
+    "individual": "Single developer or contributor",
+    "organization": "Company or open-source project adopting these principles",
+    "implementor": "Tool/library following all 16 rules",
+    "advocate": "Speaker, writer, or community leader promoting these principles"
+  }
+}
