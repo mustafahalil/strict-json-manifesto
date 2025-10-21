@@ -23,6 +23,8 @@ But most importantly: we're done with backwards compatibility that hides design 
 - [Who Should Use This](#who-should-use-this)
 - [Why Strictness Works: Evidence From Production](#why-strictness-works-evidence-from-production)
 - [FAQ](#faq)
+- [Why We Made This & Why Now](#why-we-made-this--why-now)
+- [How to Apply This](#how-to-apply-this)
 - [Get Involved](#get-involved)
 - [License](#license)
 
@@ -124,20 +126,15 @@ private String name;
 Type errors at 2 AM in production because JSON wasn't what we expected.
 
 ```json
-// Your JSON
 {"age": "abc"}
-
-// Your exception
-Exception in thread "main" java.lang.NumberFormatException: 
-  For input string: "abc"
+// Exception in thread "main" java.lang.NumberFormatException
 ```
 
 ### Security Nightmares
 RCE vulnerabilities, polymorphic typing explosions, untrusted deserialization.
 
 ```java
-// Jackson enableDefaultTyping() = Remote Code Execution
-mapper.enableDefaultTyping();  // DON'T DO THIS
+mapper.enableDefaultTyping();  // Remote Code Execution
 mapper.readValue(untrustedJson, Object.class);
 // Attacker can instantiate arbitrary classes
 ```
@@ -154,14 +151,9 @@ return parseDate(json.getString("date"));
 if (dateValue instanceof String) return parseDate(...);
 else if (dateValue instanceof Number) return parseEpoch(...);
 
-// 2014 - "Some send arrays"
-// 2016 - "Some send nested objects"  
-// 2018 - "What if it's both string and number in same array?"
-// 2020 - 400+ lines for ONE field
-// 2024 - Code is unmaintainable, still buggy
+// 2014-2024 - Add support for more formats
+// Result: 400+ lines for ONE field, still buggy
 ```
-
-**Result:** Parsing logic becomes 10x more complex, N times slower, and STILL has untested edge cases.
 
 ---
 
@@ -171,37 +163,25 @@ else if (dateValue instanceof Number) return parseEpoch(...);
 
 Don't support the edge cases used by 0.1% of developers. Don't add configuration for "future flexibility." Build for the real use case, not the imaginary one.
 
-**Result:** Fewer options = easier to learn = fewer bugs
-
 ### KISS — Keep It Simple, Stupid
 
 One way to do things. Not fifty. Same behavior, same errors, same results. Predictability > flexibility.
-
-**Result:** No surprises = no debugging = confidence
 
 ### Fail Fast — Loud Errors, Early
 
 Invalid data causes immediate, clear errors. Not silent corruption. Not "close enough." Not "maybe it'll work later."
 
-**Result:** Errors caught where they're cheap to fix, not in production at 2 AM
-
 ### Type Safety — Compile-Time Guarantees
 
 Catch errors where they're cheap to fix. Not in production. Not in logs. Not as customer bug reports.
 
-**Result:** Invalid states are impossible to construct
-
 ### Zero Magic — No Reflection, No Unsafe, No Tricks
 
-Generated code only. Compile-time determined paths. No runtime surprises. No constructor bypass. No lost default values.
-
-**Result:** Predictable performance, predictable behavior, no side effects
+Generated code only. Compile-time determined paths. No runtime surprises.
 
 ### Boundary Enforcement — Parse Once, Trust Always
 
-Validate JSON once at the system boundary. After that, your types are the guarantee. No defensive validation everywhere.
-
-**Result:** Simpler application code, single point of validation
+Validate JSON once at the system boundary. After that, your types are the guarantee.
 
 ### Strictness by Design
 
@@ -227,8 +207,8 @@ This isn't ideology. It's decades of production experience.
 - **Valid:** `"active": true` ✓
 
 ### Arrays
-- **MUST:** Explicit annotation required
-- **Without annotation:** Array processing is forbidden
+- **MUST:** Explicit annotation/declaration required
+- **Without:** Array processing is forbidden
 
 ### Null Values
 - **FORBIDDEN:** `null` values in JSON
@@ -245,8 +225,7 @@ This isn't ideology. It's decades of production experience.
 - **Deeper:** Compilation error
 
 ### Type Safety
-- **MUST:** Generate code, never use reflection
-- **Forbidden:** Runtime reflection for field access
+- **MUST:** Generate code, never use reflection for deserialization
 - **Required:** Compile-time code generation
 
 ### Circular References
@@ -295,13 +274,13 @@ Create clean, predictable Data Transfer Objects that:
 
 ### What This Manifesto IS NOT
 
-- Not trying to serialize to 50 different formats
+- Not trying to replace all JSON libraries
+- Not applicable when backwards compatibility with bad formats is critical
 - Not supporting custom types or reflection magic
 - Not providing escape hatches for edge cases
 - Not replacing proper domain modeling and validation
 - Not a JSON schema validator (use JSON Schema for that)
 - Not a one-size-fits-all solution (it's intentionally opinionated)
-- Not applicable when backwards compatibility with bad formats is required
 
 ---
 
@@ -360,8 +339,7 @@ private Integer age;
 ### Probably Not For
 
 - Projects needing maximum flexibility in JSON format
-- Systems deserializing arbitrary untrusted JSON without schema
-- Teams comfortable with 47-annotation solutions
+- Systems deserializing arbitrary untrusted JSON without schema validation
 - Existing large projects with thousands of dependencies
 - Applications where backwards compatibility with bad formats is critical
 
@@ -378,30 +356,27 @@ This manifesto isn't theoretical. It summarizes decades of production experience
 - **Protocol Buffers (Google):** Designed strict for exactly these reasons → proven at scale for 20+ years
 - **Rust ecosystem:** Serde library → strict typing, no reflection → highly reliable
 - **gRPC:** Strict schema required → industry moving this direction
-- **Industry trend:** Ecosystem learning to value strictness, not flexibility
 
 ### Why Flexibility Causes Problems
 
 **The "Flexible Parsing" Trap:**
 
 Every time you add support for another format variation:
-- Parser code grows
+- Parser code grows exponentially
 - Test coverage becomes incomplete
 - Edge case interactions become impossible to track
 - Performance degrades (isinstance checks multiply)
-- Bugs hide in the branches
-
-This is not opinion. This is observable in every major parsing library.
+- Bugs hide in untested branches
 
 ### Why Strictness Prevents Bugs
 
 | Issue | Flexible Approach | Strict Approach |
 |-------|-------------------|-----------------|
-| Type confusion | String `"10"` accepted as number, calculation error | Error at boundary, never reaches calculation |
-| Date format variance | 15+ formats supported, 800-line parser, DST bug | One format, simple parser, no bugs |
+| Type confusion | String `"10"` accepted as number → calculation error | Error at boundary, never reaches calculation |
+| Date format variance | 15+ formats supported, 800-line parser, DST bug | One format, simple parser, zero bugs |
 | Backwards compat debt | v1, v2, v3, v4 all need support, exponential complexity | Clear versioning, v1 sunsets, v2 clean |
 | Security | Flexible typing enables RCE | No polymorphic typing, no RCE surface |
-| Silent failures | Array `[x]` vs `x` accepted, later bugs | Type error caught immediately |
+| Silent failures | Array `[x]` vs `x` accepted → later bugs | Type error caught immediately |
 
 ---
 
@@ -409,15 +384,35 @@ This is not opinion. This is observable in every major parsing library.
 
 ### Q: This seems too strict. What if I need flexibility?
 
-**A:** Then this manifesto isn't for you. Use Jackson or Gson—they're proven and handle flexibility well.
+**A:** Then this manifesto isn't for you. Use Jackson, Gson, or JSON5—they're proven and handle flexibility well.
 
 This manifesto is for the 99% case where strictness catches more bugs than flexibility provides value.
 
 ---
 
+### Q: Can I use this with Jackson, Gson, or other existing libraries?
+
+**A:** Yes. This manifesto is the philosophy; the library is secondary.
+
+You can apply Strict JSON principles with any library:
+
+**Example with Jackson (strict configuration):**
+```java
+ObjectMapper mapper = new ObjectMapper();
+mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+mapper.configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true);
+mapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false);
+mapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, false);
+// Now Jackson behaves like Strict JSON
+```
+
+The manifesto describes WHAT to enforce. Your library is HOW you enforce it.
+
+---
+
 ### Q: What about backwards compatibility with existing APIs?
 
-**A:** Great question. The answer is: use adapters.
+**A:** Use adapters at your system boundary.
 
 **Inside your system:** Strict format
 **At system boundary:** Adapter converts messy external format to strict internal format
@@ -427,7 +422,7 @@ This way:
 - Your internal system always sees clean, predictable format
 - Easier to upgrade external dependencies
 
-**Better long-term:** Negotiate with API owners to support versioning instead of flexible formats. Mutual benefit.
+**Better long-term:** Negotiate with API owners to support versioning instead of flexible formats.
 
 ---
 
@@ -455,22 +450,17 @@ This is how Google, Amazon, Stripe, and other API leaders actually do it.
 
 **A:** Almost always, what feels like "need flexibility" is actually "design wasn't clear."
 
-Examples:
-
 **"Sometimes it's a string, sometimes a number"**
 → Problem: Design ambiguous
 → Solution: Choose one format, version if you need to change it
-→ Not solution: Accept both (complexity explodes)
 
 **"Some clients send null, others omit the field"**
 → Problem: API contract wasn't explicit
 → Solution: Document "field must be omitted if not provided"
-→ Not solution: Accept both (semantics become unclear)
 
 **"Legacy integration sends different format"**
 → Problem: Outside system has different design
 → Solution: Use adapter layer
-→ Not solution: Accept multiple formats in main parser
 
 ---
 
@@ -505,6 +495,123 @@ This manifesto is for when reliability > flexibility.
 But understand: the bar for changing rules is high. They need to solve real problems for the 99%, not edge cases for the 1%.
 
 Every rule emerged from production incidents. Propose changes only with equivalent evidence.
+
+---
+
+## Why We Made This & Why Now
+
+### Why We Made This
+
+We made this because we kept seeing the same production incidents repeat:
+- Type confusion that should never happen
+- Backwards compatibility debt that locks systems into bad designs
+- Flexibility features that create more bugs than they solve
+
+We realized the problem isn't "how to parse JSON better" but "why are we trying to parse flexible JSON at all?"
+
+So we asked: **What if we just said no?**
+
+No flexibility. No polymorphic typing. No reflection. One format, one parser, zero surprises.
+
+The answer turned out to be: exactly what the industry needs but is too afraid to demand because nobody wants to break backwards compatibility. We're breaking compatibility by design—and that's the point.
+
+### Why Now? The Timing
+
+**1. The Industry Finally Has Evidence**
+
+- Jackson: 15+ years of flexibility → unmaintainable, CVEs
+- Gson: Same trajectory → same vulnerabilities
+- Google Protocol Buffers: Chose strictness in 2008 → proven at scale 20+ years
+- Rust Serde: Strict typing → minimal vulnerabilities
+- gRPC: Industry standard → strict by design
+
+**The cost of flexibility is now quantified,** not theoretical.
+
+**2. Production Cost Is Undeniable**
+
+- Banking: One date bug = $500k+
+- E-commerce: One type confusion = $50k + reputation damage
+- SaaS: One silent failure = 2-hour outage + SLA violation
+- Security: RCE from flexible typing = forensics + regulatory + reputation
+
+**3. The Ecosystem Is Ready**
+
+- TypeScript's strict mode is standard
+- Rust's type system is mainstream
+- Go's explicit interfaces are accepted
+- Kotlin's null safety is expected
+- gRPC is becoming industry default
+
+**The industry already learned strictness wins.**
+
+**4. Microservices Made the Problem Undeniable**
+
+Before (2010): One monolith. Flexibility didn't hurt.
+
+Now (2024): 50+ microservices per company. Each has its own JSON contracts.
+
+When 50 teams each interpret flexible JSON differently:
+- Integration complexity explodes
+- Type mismatches multiply
+- Backwards compat becomes unmaintainable
+
+**5. Security Awareness Increased**
+
+2017-2022: Multiple RCE vulnerabilities from flexible JSON parsing.
+
+Companies now ask: "Is this exploitable?" Not "Does it have features?"
+
+Strictness = Security. Finally matters.
+
+---
+
+## How to Apply This
+
+You don't need to rewrite everything. You have options:
+
+### Option 1: New Strict JSON Implementation
+Build a new tool following these rules (ideal, but requires effort)
+
+**Best for:**
+- New projects/services
+- Teams with capacity
+- Maximum type safety
+
+### Option 2: Strict Configuration of Existing Tools
+Apply these principles to Jackson, Gson, or your existing library:
+- Disable flexible type handling
+- Fail on unknown fields
+- Enforce type strictness
+- Validate at boundaries only
+- Use input size limits
+
+**Best for:**
+- Existing projects
+- Immediate results
+- Gradual migration
+
+**Example:**
+```java
+// Jackson strict configuration
+ObjectMapper mapper = new ObjectMapper();
+mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+mapper.configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true);
+mapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false);
+mapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, false);
+mapper.configure(JsonParser.Feature.ALLOW_COMMENTS, false);
+mapper.configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, false);
+```
+
+### Option 3: Hybrid Approach
+- **Internal systems:** Strict JSON implementation
+- **External integrations:** Jackson/Gson with strict config + adapters
+- **Best of both worlds:** Safety where it matters, compatibility where needed
+
+**Best for:**
+- Mature projects
+- Multiple teams
+- Controlled rollout
 
 ---
 
