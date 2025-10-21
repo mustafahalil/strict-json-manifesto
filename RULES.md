@@ -55,6 +55,42 @@ Each rule includes implementation guidance for all three approaches.
 
 ---
 
+## Language-Agnostic Principles
+
+These rules apply to **any programming language**. The principles are universal and language-independent.
+
+**Key Concept:** WHAT vs HOW
+
+- **WHAT (Universal):** The principle each rule describes (e.g., "numbers must be unquoted")
+- **HOW (Language-Specific):** How you implement that principle in your language
+
+**Examples in this document use Java syntax for consistency**, but the same rules apply to:
+- TypeScript, JavaScript
+- Go, Rust
+- C#, .NET
+- Python, Kotlin
+- And all other programming languages
+
+**When implementing these rules in your language:**
+
+1. Read the rule (language-independent principle)
+2. Choose the implementation approach appropriate for your language
+3. Apply the principle using your language's idioms
+4. Achieve the same outcome, even if the code looks different
+
+**Example: Rule 2 (Boolean Values)**
+
+| Language | The Rule | Implementation |
+|----------|----------|-----------------|
+| Java | Booleans must be unquoted true/false | `private Boolean isActive;` |
+| TypeScript | Booleans must be unquoted true/false | `isActive: boolean \| null;` |
+| Go | Booleans must be unquoted true/false | `IsActive *bool` (pointer for nullable) |
+| Python | Booleans must be unquoted true/false | `isActive: bool \| None` |
+
+The principle is the same; the syntax is different.
+
+---
+
 ## Quick Verification Checklist
 
 When implementing according to Strict JSON principles, verify:
