@@ -392,9 +392,10 @@ If external API sends single values, use adapter:
 ### The Rule
 
 **For missing fields:**
-- **Default:** Missing fields MAY become null (implementation choice)
+- **Default:** Missing fields SHOULD become null (consistent behavior)
 - **STRICT MODE (optional):** Missing required fields → ERROR
 - **LENIENT MODE:** Missing fields → null
+- **CHOICE:** Pick one pattern and document it clearly
 
 **For explicit null:**
 - **PREFERRED:** Omit field instead of setting null
@@ -914,7 +915,9 @@ Tracking:
 
 ---
 
-## Rule 12: Circular References & Bidirectional Relationships
+## Rule 12: Avoiding Circular References in JSON
+
+### (Bidirectional Relationships & DAG Pattern)
 
 ### Why This Rule Exists
 
@@ -983,8 +986,9 @@ class Group {
 
 ### Three Strategies for Relationships
 
-#### Strategy 1: IDs Only (Recommended for JSON APIs)
-**Use when:** REST APIs, microservices, external communication
+#### Strategy 1: IDs Only (Best for Microservices)
+**Use when:** REST APIs, microservices, cross-service communication
+**Recommended if:** Simplicity and decoupling matter more than fetching relationships
 
 ```java
 // User → Group reference
@@ -1003,12 +1007,14 @@ class Group {
 
 // Benefits:
 // - Flat JSON, no cycles
-// - Client fetches what it needs
+// - Client fetches what it needs (query for relations separately)
 // - Reduces payload size
+// - Clear service boundaries
 ```
 
-#### Strategy 2: DTOs for Public APIs (Recommended for strict JSON)
-**Use when:** Public APIs, external APIs, when you want strict types
+#### Strategy 2: DTOs (Best for Strict JSON & Public APIs)
+**Use when:** Public APIs, external APIs, strict type requirements
+**Recommended if:** Type safety and Strict JSON principles are priority
 
 ```java
 // Internal entity (with cycles OK for ORM)
@@ -1046,10 +1052,16 @@ UserDTO toDTO(UserEntity entity) {
         entity.getGroup().getId()
     );
 }
+
+// Benefits:
+// - Public API is strict and type-safe
+// - Internal ORM can use any pattern
+// - Clear separation of concerns
 ```
 
-#### Strategy 3: Bidirectional with Annotations (For ORM+JSON)
-**Use when:** JPA/Hibernate + JSON serialization needed
+#### Strategy 3: Bidirectional with Annotations (Best for Internal ORM+JSON)
+**Use when:** JPA/Hibernate + JSON serialization in internal systems
+**Recommended if:** Already using ORM, need to serialize to JSON
 
 ```java
 @Entity
@@ -1073,6 +1085,7 @@ class Group {
 // - Works with ORM
 // - Prevents infinite serialization
 // - Database relationships intact
+// - Internal use only
 ```
 
 ### Why It Matters
@@ -1202,14 +1215,17 @@ mapper.readValue(json, UserDTO.class);  // Specific type
 ```
 
 #### 13.2 Reflection Usage: Generated Code Preferred
-- **SHOULD NOT:** Use reflection for field access (prefer generated code)
-- **ACCEPTABLE:** Jackson/Gson reflection usage (they optimize well)
-- **ACCEPTABLE:** JPA/Hibernate reflection (necessary for ORM)
-- **GOAL:** Minimize reflection in deserialization path where possible
+- **SHOULD NOT:** Use reflection for field access in custom code (prefer generated code)
+- **ACCEPTABLE:** Third-party library reflection usage (Jackson, Gson, Hibernate)
+  - These libraries use reflection efficiently and are battle-tested
+  - Well-optimized, minimal performance impact
+  - Acceptable and recommended for production use
+- **PREFERRED:** If building custom deserializer, use generated code
+- **GOAL:** Minimize custom reflection in deserialization path
 - **RESULT:** Better performance, GraalVM compatibility, predictability
 
 **Rationale:**
-Reflection isn't inherently bad, but generated code is better when possible. Jackson and Gson are well-optimized and use reflection efficiently. JPA/Hibernate require reflection by design. The principle is: prefer generated code in your deserialization layer, accept reflection where frameworks require it.
+Reflection isn't inherently bad, but generated code is better when you control the code. Jackson, Gson, and Hibernate use reflection efficiently after decades of optimization. JPA/Hibernate require reflection by design for ORM. The principle is: prefer generated code in your own deserialization layer, but accept that established frameworks use reflection well.
 
 ```java
 // ✗ AVOID in custom code
@@ -1283,10 +1299,17 @@ Security checklist:
 
 ### The Rules
 
-#### 14.1 Zero Reflection
-- **MUST:** Generated code only
-- **RESULT:** No runtime overhead
-- **Benefit:** Predictable performance, GraalVM compatible
+#### 14.1 Generated Code Preferred
+- **SHOULD:** Use generated code for field access
+- **ACCEPTABLE:** Third-party library reflection (Jackson, Gson, Hibernate)
+  - These libraries use reflection efficiently
+  - Well-optimized, minimal performance impact
+  - Recommended for production use
+- **AVOID:** Custom reflection in deserialization code
+- **RESULT:** Better performance, GraalVM compatibility, predictability
+
+**Rationale:**
+Generated code is ideal when you control it. But established frameworks like Jackson, Gson, and Hibernate use reflection efficiently after decades of optimization. The goal is to avoid unnecessary reflection in your custom deserialization logic while accepting that mature libraries handle reflection well.
 
 #### 14.2 Minimal Allocations
 - **MINIMIZE:** Object creation
