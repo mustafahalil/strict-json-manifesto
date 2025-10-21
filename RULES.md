@@ -1,14 +1,21 @@
 # Strict JSON Manifesto — Detailed Rules
 
-This document specifies the exact rules that implementations following the Strict JSON Manifesto must enforce. These are non-negotiable principles for any tool or library claiming to follow this manifesto.
+This document specifies the exact rules that implementations following the Strict JSON Manifesto must enforce.
 
-**Table of Contents**
-- [Language-Agnostic Principles](#language-agnostic-principles)
+**Note:** These rules are strict by design, but pragmatism matters. Where rules conflict with legitimate production needs, use adapters or make explicit trade-offs documented.
+
+---
+
+## Table of Contents
+
+- [How to Use This Document](#how-to-use-this-document)
+- [Quick Verification Checklist](#quick-verification-checklist)
+- [Implementation Approaches](#implementation-approaches)
 - [Rule 1: Numeric Values](#rule-1-numeric-values)
 - [Rule 2: Boolean Values](#rule-2-boolean-values)
 - [Rule 3: String Handling](#rule-3-string-handling)
 - [Rule 4: Array Handling](#rule-4-array-handling)
-- [Rule 5: Null Values](#rule-5-null-values)
+- [Rule 5: Null and Missing Fields](#rule-5-null-and-missing-fields)
 - [Rule 6: Date/Time Handling](#rule-6-datetime-handling)
 - [Rule 7: Field Mapping](#rule-7-field-mapping)
 - [Rule 8: Type System](#rule-8-type-system)
@@ -19,825 +26,1151 @@ This document specifies the exact rules that implementations following the Stric
 - [Rule 13: Security](#rule-13-security)
 - [Rule 14: Performance](#rule-14-performance)
 - [Rule 15: JSON Compliance](#rule-15-json-compliance)
-- [Rule 16: Data Transmission Format](#rule-16-data-transmission-format)
 
 ---
 
-## Language-Agnostic Principles
+## How to Use This Document
 
-These rules apply to **any programming language**. The principles are universal and language-independent. Examples in this document use **Java syntax** for consistency, but the same rules apply to TypeScript, Go, C#, Python, Kotlin, and all other languages.
+These rules can be implemented in three ways:
 
-### Key Concept: WHAT vs HOW
+### 1. New Strict JSON Implementation
+Build a tool from scratch following these rules
+- **Best for:** New projects, teams with capacity, maximum control
+- **Effort:** High (build parser, code generator, tooling)
+- **Result:** Perfect compliance, best UX
 
-Each rule defines **WHAT must be done** (universal principle).  
-**HOW to do it** depends on language-specific capabilities and idioms.
+### 2. Strict Configuration of Existing Tools
+Configure Jackson, Gson, or other libraries to follow these rules
+- **Best for:** Existing projects, immediate results
+- **Effort:** Low (configuration + validation layer)
+- **Result:** Good compliance, leverages familiar tools
 
-### Multi-Language Examples
+### 3. Hybrid Approach
+Mix strict internals with adapters for messy external data
+- **Best for:** Mature systems, multiple teams
+- **Effort:** Medium (architecture + adapters)
+- **Result:** Pragmatic safety where it matters
 
-**Rule 1: Numeric Values (Wrapper Types)**
-
-| Principle | Java | TypeScript | Go | Python | .NET |
-|-----------|------|------------|----|---------|----|
-| Unquoted numbers | `Integer`, `Long`, `Double` | `number`, `bigint` | `int64`, `float64` | `int`, `float` | `int`, `long`, `decimal` |
-| No scientific notation | Enforce in parser | Enforce in parser | Enforce in parser | Enforce in parser | Enforce in parser |
-| Wrapper types | `Integer` not `int` | Number type | Interface, not primitive | Type hints | Nullable types |
-
-**Rule 2: Boolean Values (Nullable/Wrapper)**
-
-| Language | Correct | Wrong |
-|----------|---------|-------|
-| Java | `Boolean active;` | `boolean active;` |
-| TypeScript | `active: boolean \| null;` | `active: boolean;` |
-| Go | `*bool` or `optional` | `bool` (no null) |
-| Python | `active: bool \| None` | `active: bool` |
-| .NET | `bool?` | `bool` |
-
-**Rule 4: Array Handling (Explicit Declaration)**
-
-| Language | Correct | Wrong |
-|----------|---------|-------|
-| Java | `List<String> tags;` | `String[] tags;` or `ArrayList` |
-| TypeScript | `tags: string[];` or `tags: Array<string>;` | `tags: string \| string[];` |
-| Go | `tags []string` | `tags interface{}` |
-| Python | `tags: List[str]` | `tags: list` (untyped) |
-| .NET | `List<string> tags;` | `object[] tags;` |
-
-**Rule 6: Date/Time Handling (ISO 8601 UTC Only)**
-
-| Language | Correct | Wrong |
-|----------|---------|-------|
-| Java | `Instant timestamp;` | `Date` or `LocalDateTime` |
-| TypeScript | `timestamp: Date;` with ISO input | Custom date parsing |
-| Go | `time.Time` with UTC | Unix timestamp |
-| Python | `datetime.datetime` with UTC | Milliseconds or string formats |
-| .NET | `DateTimeOffset` with UTC | `DateTime` without offset |
-
-### Implementation Pattern
-
-1. **Parse Rule**: Define validation logic (universal)
-2. **Type Mapping**: Choose language-appropriate type
-3. **Enforce**: Add compile-time or runtime checks
-4. **Error**: Fail fast with clear messages
-
-### Example: Implementing Rule 1 (Numeric Values)
-```
-UNIVERSAL RULE: Numbers must be unquoted, use wrapper types
-
-Java Implementation:
-  ✓ private Integer age;     // Wrapper type
-  ✗ private int age;         // Primitive rejected
-  ✗ "age": "25"              // Quoted number rejected
-
-TypeScript Implementation:
-  ✓ age: number;             // Type-safe number
-  ✓ age?: number;            // Optional allowed
-  ✗ age: string;             // String rejected
-  ✗ age: any;                // Any type rejected
-
-Go Implementation:
-  ✓ Age *int64              // Pointer = nullable
-  ✓ Age int64               // Non-null if required
-  ✗ Age interface{}         // Dynamic type rejected
-
-Python Implementation:
-  ✓ age: int | None         // Union with None
-  ✓ age: Optional[int]      // Type hints
-  ✗ age: Any                // Any type rejected
-```
-
-### When Rules Conflict with Language Features
-
-**Principle**: Follow the Strict JSON manifesto spirit, adapt to language idioms.
-
-- **Go has no null** → Use pointers for nullable fields
-- **Python is dynamically typed** → Use type hints + runtime validation
-- **TypeScript has any type** → Avoid it, use strict union types
-- **JavaScript lacks static types** → Use runtime validators (Zod, JSON Schema)
-
-### Reference for Implementers
-
-When building a tool in your language:
-
-1. Read the rule (language-independent principle)
-2. Map to your language's type system
-3. Implement validation at appropriate layer (compile-time or runtime)
-4. Fail fast when rules violated
-5. Provide clear error messages
+Each rule includes implementation guidance for all three approaches.
 
 ---
+
+## Quick Verification Checklist
+
+When implementing according to Strict JSON principles, verify:
+
+- [ ] Numeric values unquoted in JSON, wrapper types in code
+- [ ] Booleans unquoted true/false only
+- [ ] Strings preserved exactly (no trimming/normalization)
+- [ ] Arrays explicitly declared with type information
+- [ ] Null values handled explicitly (documented strategy)
+- [ ] Dates ISO 8601 UTC only
+- [ ] Field mapping exact or explicitly custom
+- [ ] Types limited to specified set (no Object/Any)
+- [ ] Nested objects follow same rules
+- [ ] Max 10 level nesting depth enforced
+- [ ] Circular references prevented at compile time
+- [ ] Fail fast on errors with clear messages
+- [ ] No polymorphic type loading
+- [ ] Generated code preferred, no reflection
+- [ ] Input size limits enforced
+- [ ] RFC 8259 compliant JSON
+
+---
+
+## Implementation Approaches
+
+### Configuration Profiles
+
+#### Strict Profile (Recommended)
+```java
+// Jackson
+ObjectMapper mapper = new ObjectMapper();
+mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+mapper.configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true);
+mapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false);
+mapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, false);
+mapper.configure(JsonParser.Feature.ALLOW_COMMENTS, false);
+mapper.configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, false);
+mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+```
+
+#### Lenient Profile (With Adapters)
+```java
+// Jackson + custom validation layer
+ObjectMapper mapper = new ObjectMapper();
+mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+mapper.configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, false);
+// Add validation layer for strict requirements
+```
+
 ---
 
 ## Rule 1: Numeric Values
 
-### 1.1 JSON Format
+### Why This Rule Exists
 
-**MUST:** Numbers in JSON MUST be unquoted  
-**MUST NOT:** Quoted numbers are forbidden
+**Production Incident:** E-commerce platform accepted price as both String and Number
+- **2018:** Design decision: support both for "flexibility"
+- **2023:** Type confusion bug in calculation logic
+- **Impact:** Customers charged 10x their intended price
+- **Root cause:** Flexible type handling + calculation bug = missed in testing
 
-```json
-✓ VALID
-{
-  "age": 25,
-  "price": 150.00,
-  "balance": 1234.56,
-  "bigNumber": 999999999999999
-}
+**Principle:** Type clarity at the boundary prevents downstream bugs.
 
-✗ INVALID
-{
-  "age": "25",           // ERROR: quoted number
-  "price": "150.00",     // ERROR: quoted number
-  "invalid": "abc"       // ERROR: not a number
-}
+### The Rule
+
+- **MUST:** Numbers in JSON MUST be unquoted
+- **MUST:** Use wrapper/nullable types in code (Integer, not int)
+- **FORBIDDEN:** Quoted numbers `"age": "25"` ✗
+- **VALID:** Unquoted numbers `"age": 25` ✓
+
+### Why It Matters
+
+- Clear type intent at parsing time
+- Errors caught immediately, not hidden in calculation
+- No accidental type coercion
+- Better performance (no string-to-number conversion needed)
+
+### Implementation
+
+**With Jackson (Strict):**
+```java
+mapper.configure(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS, false);
+mapper.configure(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS, true);
+
+// Use wrapper types
+private Integer age;      // ✓ Correct
+private Long id;          // ✓ Correct
+private Double price;     // ✓ Correct
+// NOT: private int age; (primitive not allowed)
 ```
 
-### 1.2 Type Selection
+**With Gson:**
+```java
+gson = new GsonBuilder()
+    .setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE)
+    .create();
 
-**MUST:** Use appropriate numeric types based on value
+private Integer age;      // ✓ Wrapper type
+```
 
-| JSON Value | Recommended Type | Language Examples |
-|------------|------------------|-------------------|
-| 123 | 32-bit integer | Java: `Integer`, Kotlin: `Int`, TypeScript: `number` |
-| 2147483648 | 64-bit long | Java: `Long`, Kotlin: `Long`, TypeScript: `bigint` |
-| 123.45 | Floating point | Java: `Double`, Kotlin: `Double`, TypeScript: `number` |
-| Very large decimals | Arbitrary precision | Java: `BigDecimal`, Kotlin: `BigDecimal` |
+**From Scratch:**
+```
+Parser rules:
+- Reject if number is quoted
+- Accept: 123, -456, 123.45
+- Reject: "123", 1.23e10 (scientific notation)
+- Use language's nullable numeric type
+```
 
-**MUST:** Use wrapper/nullable types, not primitives
+### Common Mistakes
 
 ```java
+// ✗ WRONG - Primitive type
+private int age;
+
+// ✗ WRONG - Quoted number
+{"age": "25"}
+
 // ✓ CORRECT
 private Integer age;
-private Double price;
-private Long id;
-
-// ✗ WRONG
-private int age;           // Primitive - not allowed
-private double price;      // Primitive - not allowed
+{"age": 25}
 ```
 
-### 1.3 No Scientific Notation
+### When to Be Flexible
 
-**MUST NOT:** Scientific notation in JSON  
-**FORBIDDEN:** Numbers like `1.23e10`, `5E-3`, `2.5e+2`
-
-```json
-✓ VALID
-{
-  "small": 0.0000123,
-  "large": 123000000000,
-  "precise": 123.456789
-}
-
-✗ INVALID
-{
-  "small": 1.23e-5,      // ERROR: scientific notation
-  "large": 1.23e10,      // ERROR: scientific notation
-  "number": 2.5E+2,      // ERROR: scientific notation
-  "value": 5e3           // ERROR: scientific notation
-}
+If third-party API sends quoted numbers, use adapter:
+```java
+// External API: {"price": "19.99"}
+// Adapter converts to strict: {"price": 19.99}
 ```
-
-**Why?** Scientific notation adds ambiguity and parsing complexity. Use explicit decimal representation instead.
-
-### 1.4 String Representation Preservation
-
-**MUST:** For numeric fields used in specific contexts (IDs, codes), preserve string representation
-
-```json
-{
-  "customerId": 123456,
-  "productCode": "00123"
-}
-```
-
-Applications should provide access to both numeric and string representations where needed for business logic.
 
 ---
 
 ## Rule 2: Boolean Values
 
-### 2.1 JSON Format
+### Why This Rule Exists
 
-**MUST:** Booleans in JSON MUST be unquoted `true` or `false`  
-**MUST NOT:** Quoted booleans, numeric representations, or string values
+**Problem:** Legacy systems sometimes send booleans as strings/numbers
+- `"active": "true"` (string)
+- `"active": 1` (number)
+- `"active": "yes"` (natural language)
 
-```json
-✓ VALID
-{
-  "active": true,
-  "enabled": false,
-  "isAdmin": true
-}
+**Result:** Parser complexity, type confusion, silent bugs
 
-✗ INVALID
-{
-  "active": "true",       // ERROR: quoted boolean
-  "enabled": 1,           // ERROR: numeric not allowed
-  "isAdmin": "yes",       // ERROR: string not allowed
-  "flag": "false"         // ERROR: quoted boolean
-}
+### The Rule
+
+- **MUST:** Booleans MUST be unquoted `true` or `false` only
+- **MUST:** Use nullable wrapper type (Boolean, not boolean)
+- **FORBIDDEN:** String representations, numeric values
+- **VALID:** `"active": true` ✓
+- **INVALID:** `"active": "true"` ✗, `"active": 1` ✗
+
+### Why It Matters
+
+- Unambiguous true/false state
+- No type coercion surprises
+- Simpler parser logic
+- Tri-state logic supported (true/false/null)
+
+### Implementation
+
+**With Jackson:**
+```java
+private Boolean isActive;    // ✓ Nullable wrapper
+
+mapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false);
+// Enforces true/false syntax
 ```
 
-### 2.2 Type Requirements
+**With Gson:**
+```java
+private Boolean isActive;
+gson = new GsonBuilder().create();
+// Gson strictly enforces true/false by default
+```
 
-**MUST:** Boolean fields use nullable/wrapper types
+**From Scratch:**
+```
+Parser rules:
+- Accept: true, false (lowercase only)
+- Reject: "true", True, TRUE
+- Reject: 1, 0, "yes", "no"
+- Use nullable boolean type
+```
+
+### Common Mistakes
 
 ```java
+// ✗ WRONG - Primitive
+private boolean active;
+
+// ✗ WRONG - String representation
+{"active": "true"}
+
 // ✓ CORRECT
 private Boolean active;
-private Boolean enabled;
-
-// ✗ WRONG
-private boolean active;    // Primitive - not allowed
-```
-
-### 2.3 Tri-State Logic
-
-**If application requires tri-state (true/false/unknown):**
-- Use nullable Boolean (null = unknown)
-- Do NOT use strings or custom types
-- Document the semantics clearly
-
-```java
-// ✓ ACCEPTABLE
-private Boolean featureEnabled;  // true, false, or null (unknown)
+{"active": true}
 ```
 
 ---
 
 ## Rule 3: String Handling
 
-### 3.1 Absolute Preservation
+### Why This Rule Exists
 
-**MUST:** String values MUST be preserved exactly as received  
-**MUST NOT:** No trimming, normalization, or modification
+**Principle:** Strings are user data. Preserve as-is.
 
+### The Rule
+
+- **MUST:** Preserve exactly as received (no trimming, normalization)
+- **MUST:** Support full UTF-8
+- **MUST NOT:** Auto-convert to other types
+
+**Valid Examples:**
 ```json
 {
-  "name": "  John Doe  ",        // Preserved: "  John Doe  "
-  "code": "00123",               // Preserved: "00123"
-  "text": "Line1\n\nLine2",      // Preserved with newlines
-  "empty": "",                   // Preserved: empty string
-  "unicode": "José María 🚀"     // Preserved: Unicode maintained
+  "name": "  John Doe  ",        // Whitespace preserved
+  "code": "00123",               // Leading zeros preserved
+  "empty": "",                   // Empty string valid
+  "unicode": "José María 🚀"     // Full UTF-8 supported
 }
 ```
 
-**Why?** If the sender included whitespace or leading zeros, they had a reason. Removing them is data loss.
+### Why It Matters
 
-### 3.2 Unicode Support
+- Data integrity
+- Respects user intent (leading zeros, whitespace)
+- No hidden transformations
+- Full internationalization support
 
-**MUST:** Full UTF-8 support required  
-**MUST:** Unicode escape sequences handled correctly  
-**MUST:** Emoji and special characters preserved
+### Implementation
 
+**With Jackson:**
 ```java
-// ✓ CORRECT - All representations work
-private String name;           // "José María"
-private String emoji;          // "🚀"
-private String escaped;        // "\u0048\u0065\u006C\u006C\u006F" = "Hello"
+private String name;
+mapper.configure(JsonParser.Feature.INCLUDE_SOURCE_IN_EXCEPTION, true);
+// Preserves exact string content
 ```
 
-### 3.3 No Auto-Conversion
-
-**MUST NOT:** Attempt to convert strings to other types automatically
-
-```json
-// Input JSON
-{"count": "123"}
-
-// ✗ WRONG - Don't auto-convert string to number
-// This should cause an error or be explicit
+**With Gson:**
+```java
+gson = new GsonBuilder().create();
+// Gson preserves strings by default
 ```
 
 ---
 
 ## Rule 4: Array Handling
 
-### 4.1 Explicit Declaration
+### Why This Rule Exists
 
-**MUST:** Array/collection fields MUST be explicitly declared  
-**Default:** Single values only (non-array)
+**Problem:** Some APIs send single values for array fields, others send arrays
+- `"tags": "new"` vs `"tags": ["new"]`
+- Auto-wrapping hides intention
+- Makes schema unclear
 
+### The Rule
+
+- **MUST:** Array fields explicitly declared/typed
+- **MUST:** Always expect `[]` format
+- **MUST NOT:** Auto-wrap single values to arrays
+- **VALID:** `"tags": ["new", "sale"]` ✓
+- **INVALID:** `"tags": "new"` ✗ (for List field)
+
+### Why It Matters
+
+- Clear contract: field is always array or never array
+- No implicit type coercion
+- Parser simpler
+- Schema unambiguous
+
+### Implementation
+
+**With Jackson:**
 ```java
-// ✓ CORRECT - Explicit array declaration
+private List<String> tags;           // ✓ Declares array
+private Set<Integer> scores;         // ✓ Also valid
+
+// NOT: private String[] tags;       // Array type not used
+// NOT: private String tags;         // Single value
+```
+
+**With Gson:**
+```java
 private List<String> tags;
-private Set<Integer> scores;
-
-// ✗ WRONG - Implicit array/single value handling
-// Fields should not accept both single values and arrays
+gson = new GsonBuilder()
+    .create();
+// Reject if not array: throw error
 ```
 
-### 4.2 Strict Array Format Required
-
-**MUST:** Array/List fields MUST always receive values in array format `[]`  
-**MUST NOT:** Single values for array fields (no auto-wrapping)
-
-```json
-✓ VALID
-{
-  "tags": ["new", "sale"],      // Array with multiple values
-  "items": ["single"],          // Array with single value
-  "scores": []                  // Empty array
-}
-
-✗ INVALID
-{
-  "tags": "new",               // ERROR: single value, not array
-  "items": "value",            // ERROR: must use ["value"]
-  "scores": null               // ERROR: use [], not null
+**Validation Layer:**
+```java
+if (json.has("tags") && !json.get("tags").isArray()) {
+    throw new ValidationException("Field 'tags' must be array");
 }
 ```
 
-**Why?** Clear type contract. No ambiguity. Developer immediately knows what to expect.
-
-### 4.3 No Auto-Wrapping
-
-**MUST NOT:** Implementations must NOT auto-wrap single values to arrays  
-**MUST:** If JSON provides `"tags": "value"` for array field, reject with error
+### Common Mistakes
 
 ```java
-// ✗ DON'T DO THIS
-// Don't auto-convert "tags": "value" to ["value"]
-// This violates the contract
+// ✗ WRONG - Type coercion
+private List<String> tags;  // But accepts: "value"
+
+// ✗ WRONG - Auto-wrapping
+"tags": "new" → ["new"]
 
 // ✓ CORRECT
-// If JSON has "tags": "value" for List<String> tags field:
-//   ERROR: Field 'tags' expected array [] but got string
+private List<String> tags;
+"tags": ["new", "sale"]
 ```
 
-### 4.3 Supported Collection Types
+### When to Be Flexible
 
-**MUST Support:**
-- `List<T>` — Preserves order and duplicates
-- `Set<T>` — Removes duplicates
-
-**SHOULD Support:**
-- List implementations (`ArrayList`, `LinkedList`) — Use through `List` interface only
-
-**MUST NOT Support:**
-- `Map<String, Object>` — Type safety lost. Use typed classes instead
-- `Map<String, ?>` with untyped values — All values must be explicitly typed
-- Untyped collections — All generics required
-- Custom collection types — Standard JDK collections only
-
-**Use Typed Classes Instead of Map<String, Object>:**
-
+If external API sends single values, use adapter:
 ```java
-// ✗ WRONG - Type ambiguity
-private Map<String, Object> metadata;
-
-// ✓ CORRECT - Explicit structure
-private class Metadata {
-    private String key;
-    private String value;
-    private Long timestamp;
-}
-private Metadata metadata;
-
-// ✓ CORRECT - If you need typed key-value pairs
-private class Attributes {
-    private Map<String, String> values;  // Explicitly typed values
-}
-private Attributes attributes;
+// External: {"tags": "new"}
+// Adapter: {"tags": ["new"]}
+// Then parse as strict
 ```
-
-**Why?** `Object` defeats type safety. Make the structure explicit in a class definition — it's clearer, safer, and follows the manifesto's "Make Illegal States Unrepresentable" principle.
 
 ---
 
-## Rule 5: Null Values
+## Rule 5: Null and Missing Fields
 
-### 5.1 Missing Field Behavior
+### Why This Rule Exists
 
-**Default (Lenient Mode):** Missing fields become null  
-**Strict Mode (Optional):** Missing fields throw error
+**Problem:** "Null" and "missing field" have different semantics
+- `{"name": "John"}` — age field missing
+- `{"name": "John", "age": null}` — age explicitly null
 
-```java
-// JSON: {"name": "John"}  (age missing)
+**In strict systems:** These should be explicit, not ambiguous
 
-// Lenient mode (default)
-private String name;      // "John"
-private Integer age;      // null
+**However:** Pragmatism matters. Most systems need to handle both.
 
-// Strict mode (if supported)
-private String name;      // "John"
-private Integer age;      // ERROR: Field 'age' is required
-```
+### The Rule
 
-### 5.2 Explicit Null Values
+**For missing fields:**
+- **Default:** Missing fields MAY become null (implementation choice)
+- **STRICT MODE (optional):** Missing required fields → ERROR
+- **LENIENT MODE:** Missing fields → null
 
-**MUST NOT:** `null` values in JSON are forbidden  
-**Must:** Omit field instead
+**For explicit null:**
+- **PREFERRED:** Omit field instead of setting null
+- **ALLOWED:** Explicit null IF documented
+- **NEVER:** Ambiguous null that could mean "missing"
 
+**Valid Examples:**
 ```json
-✓ VALID - Omit missing field
-{
-  "name": "John"
-}
+// Omit field (preferred)
+{"name": "John"}
 
-✗ INVALID - Don't use null
-{
-  "name": "John",
-  "age": null          // ERROR: null not allowed
-}
+// Explicit null (allowed if documented)
+{"name": "John", "age": null}
+
+// NOT: {"name": "John", "age": null} mixed with omit pattern
+// (pick one pattern and stick to it)
 ```
 
-### 5.3 Default Values
+### Why It Matters
 
-**MUST:** Missing fields default to null when appropriate  
-**MUST NOT:** No automatic default values (empty strings, zero, false)
+- Explicit intent: Is field missing or null?
+- Tri-state logic possible: true/false/null
+- Consistent patterns prevent bugs
+- Backward compatibility easier with versioning
+
+### Implementation
+
+**With Jackson (Lenient):**
+```java
+private String name;
+private Integer age;  // null if missing
+
+mapper.configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true);
+// Primitives can't be null, forces wrapper types
+```
+
+**With Jackson (Strict):**
+```java
+// Add validation: required fields must be present
+@NotNull
+private String name;
+
+// Optional fields may be null
+@Nullable
+private Integer age;
+
+mapper.configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true);
+```
+
+**With Gson:**
+```java
+private String name;
+private Integer age;
+// Both may be null
+```
+
+**From Scratch:**
+```
+Strategy 1: Lenient (default)
+- Missing field → null
+- Explicit null → null
+- No error
+
+Strategy 2: Strict (optional)
+- Missing required field → ERROR
+- Explicit null on optional → null
+- Requires annotation: @Required, @Optional
+
+Strategy 3: Explicit (recommended)
+- Choose one pattern per API
+- Document in API spec: "Fields must be omitted, not set to null"
+- Or: "Fields may be null to indicate unknown state"
+```
+
+### Common Patterns
 
 ```java
-// Missing fields always become null
-private String name = null;      // Missing -> null
-private Integer age = null;      // Missing -> null
-private Boolean active = null;   // Missing -> null
+// Pattern 1: Lenient (permissive)
+private String name;      // null if missing OR explicit null
+private Integer age;      // null if missing OR explicit null
 
-// ✗ WRONG - Don't auto-provide defaults
-// private String name = "";       // Incorrect default
-// private int age = 0;            // Incorrect default
+// Pattern 2: Strict (enforced)
+@NotNull
+private String name;      // ERROR if missing or null
+
+@Nullable
+private Integer age;      // null if missing or explicit null
+
+// Pattern 3: Tri-state (business logic)
+private Boolean featureEnabled;  // true/false/null (unknown)
 ```
+
+### When to Be Flexible
+
+**OK to relax null rules if:**
+- Third-party API sends nulls inconsistently
+- Use adapter to convert to consistent pattern
+- Internal system uses strict pattern
+
+**NOT OK:**
+- Accepting both null and missing field as same (pick one)
+- Treating null as empty string or false
+- Silent null that causes NullPointerException later
 
 ---
 
 ## Rule 6: Date/Time Handling
 
-### 6.1 Format Standard
+### Why This Rule Exists
 
-**MUST:** Only ISO 8601 UTC format accepted  
-**Format:** `YYYY-MM-DDTHH:mm:ss[.fff]Z`
+**Problem:** Date formats vary across systems
+- ISO 8601: `2024-12-25T14:30:00Z`
+- Unix epoch: `1735126200`
+- Custom format: `12/25/2024`
 
-```json
-✓ VALID
-{
-  "timestamp": "2024-12-25T14:30:00Z",
-  "created": "2024-12-25T14:30:00.123Z",
-  "updated": "2025-01-15T09:45:30.456Z"
-}
+**Result:** Parser complexity, timezone bugs, DST issues
 
-✗ INVALID
-{
-  "timestamp": "2024-12-25T14:30:00+03:00",    // Timezone not UTC
-  "created": "2024-12-25",                     // Date only
-  "date": "Dec 25, 2024",                      // Natural language
-  "time": "14:30:00",                          // Time only
-  "timestamp": 1735126200000                   // Milliseconds
-}
+**Production Incident:** Banking API supported 15+ date formats
+- One 2014 integration used custom format
+- Format special-cased in parser
+- 2020: DST transition broke edge case
+- Cost: Full audit + compensation
+
+### The Rule
+
+- **MUST:** ISO 8601 UTC format only
+- **FORMAT:** `YYYY-MM-DDTHH:mm:ss[.fff]Z`
+- **TIMEZONE:** UTC always (Z = Zulu = UTC)
+- **INVALID:** Custom formats, timezones, epoch
+- **VALID:** `"2024-12-25T14:30:00Z"` ✓
+
+### Why It Matters
+
+- Standard format, no ambiguity
+- Timezone explicit (always UTC)
+- No conversion confusion
+- Works across all systems
+
+### Implementation
+
+**With Jackson:**
+```java
+private Instant timestamp;  // Jackson handles ISO 8601 natively
+
+mapper.registerModule(new JavaTimeModule());
+mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+// Forces ISO 8601 format
+
+// Custom deserializer if needed:
+ObjectMapper mapper = new ObjectMapper();
+mapper.registerModule(new JavaTimeModule());
 ```
 
-### 6.2 Type Requirements
+**With Gson:**
+```java
+private LocalDateTime timestamp;
 
-**MUST:** Use language-appropriate temporal types
+gson = new GsonBuilder()
+    .registerTypeAdapter(LocalDateTime.class, 
+        new JsonDeserializer<LocalDateTime>() {
+            public LocalDateTime deserialize(...) {
+                return LocalDateTime.parse(json, ISO_DATE_TIME);
+            }
+        })
+    .create();
+```
+
+**From Scratch:**
+```
+Parser rules:
+- Accept: 2024-12-25T14:30:00Z
+- Accept: 2024-12-25T14:30:00.123Z (with milliseconds)
+- Reject: 2024-12-25T14:30:00+02:00 (timezone offset)
+- Reject: 1735126200 (epoch)
+- Reject: 12/25/2024 (custom format)
+- Always interpret as UTC
+```
+
+### Common Mistakes
 
 ```java
+// ✗ WRONG - Epoch timestamp
+{"date": 1735126200}
+
+// ✗ WRONG - Timezone offset
+{"date": "2024-12-25T14:30:00+02:00"}
+
+// ✗ WRONG - Custom format
+{"date": "12/25/2024"}
+
 // ✓ CORRECT
-private Instant timestamp;              // Java - ISO 8601 parsing
-private OffsetDateTime created;         // With offset info
-private LocalDateTime updated;          // When offset not needed
-
-// Language equivalents
-// TypeScript: Date (with ISO string input)
-// Python: datetime.datetime
-// Go: time.Time
-// Kotlin: Instant
+{"date": "2024-12-25T14:30:00Z"}
 ```
 
-### 6.3 Timezone Handling
+### When to Be Flexible
 
-**MUST:** All dates interpreted as UTC  
-**MUST:** No timezone conversion without explicit requirement
-
-```
-"2024-12-25T14:30:00Z" = UTC time 14:30:00
-Not converted to local time automatically
-Application handles conversion if needed
+If legacy API uses epoch, use adapter:
+```java
+// External: {"date": 1735126200}
+// Adapter: {"date": "2024-12-25T14:30:00Z"}
+// Then parse as strict
 ```
 
 ---
 
 ## Rule 7: Field Mapping
 
-### 7.1 Default Mapping
+### Why This Rule Exists
 
-**MUST:** Exact field name matching (case-sensitive)  
-**MUST NOT:** No automatic case conversion
+**Problem:** Field name conventions vary
+- camelCase vs snake_case vs kebab-case
+- `userName` vs `user_name` vs `user-name`
 
+**Too much flexibility:** Parser must try multiple names
+
+### The Rule
+
+- **DEFAULT:** Exact field name matching (case-sensitive)
+- **CUSTOM:** Single explicit custom mapping per field
+- **NOT:** Multiple aliases (no `userName` OR `user_name` OR `email_address`)
+
+**Valid:**
 ```json
-{
-  "userName": "john",
-  "user_name": "jane",
-  "UserName": "bob"
-}
+{"userName": "john"}
+// Maps to: private String userName;  (exact match)
+
+// With custom mapping (if supported):
+@JsonProperty("first_name")
+private String firstName;
 ```
 
+### Why It Matters
+
+- Clear schema contract
+- No ambiguity about field names
+- Parser simple and fast
+- No guess-work
+
+### Implementation
+
+**With Jackson:**
 ```java
-// ✓ CORRECT - Each maps to specific field
-private String userName;       // Matches: "userName" only
-private String user_name;      // Matches: "user_name" only
-private String UserName;       // Matches: "UserName" only
+private String userName;      // Exact match
+
+@JsonProperty("user_name")    // Custom mapping (single)
+private String firstName;
+
+// NOT multiple aliases
 ```
 
-### 7.2 Custom Mapping
-
-**If supported:** Single custom mapping per field
-
+**With Gson:**
 ```java
-// ✓ EXAMPLE (if implementation supports this)
-// Pseudo-code - actual syntax depends on implementation
-private String firstName;      // Maps to: "first_name" in JSON
-private String email;          // Maps to: "email_address" in JSON
+private String userName;
+
+@SerializedName("user_name")
+private String firstName;
 ```
 
-**MUST NOT:** Multiple aliases for one field
-
-```java
-// ✗ WRONG
-// Don't support: "email" OR "mail" OR "email_address"
-// Support only ONE mapping per field
+**From Scratch:**
 ```
-
-### 7.3 Unknown Fields
-
-**Default:** Unknown fields ignored  
-**Strict Mode:** Unknown fields may cause error
-
-```json
-// Input
-{"name": "John", "unknownField": "value"}
-
-// Lenient (default): Processes "name", ignores "unknownField"
-// Strict mode: May error on unknown field
+Field mapping strategy:
+1. Exact name match first
+2. If custom mapping exists, use it
+3. If no match: throw error
+4. No guessing, no fallbacks
 ```
 
 ---
 
 ## Rule 8: Type System
 
-### 8.1 Supported Types
+### Why This Rule Exists
 
-Implementations MUST support:
+**Principle:** Type safety prevents bugs. Untyped data → bugs.
 
-**Primitive/Scalar Types:**
+### The Rule
+
+**Supported Types:**
 - String
 - Integer (32-bit)
 - Long (64-bit)
-- Double (floating point)
-- Float (floating point)
+- Double, Float
 - Boolean
+- Instant/LocalDateTime (ISO 8601 UTC)
+- List<T> (typed collections)
+- Set<T> (typed collections)
+- Nested typed objects
 
-**Temporal Types:**
-- Instant / Timestamp (ISO 8601 UTC)
+**FORBIDDEN:**
+- `Object` or untyped values
+- `Map<String, Object>` (untyped values)
+- `Any` type
+- Custom collection types
+- Reflection-based field access
 
-**Collection Types:**
-- List<T>
-- Set<T>
-
-**Complex Types:**
-- Nested objects (other DTO classes)
-- Nested collections (List<DTO>, Set<DTO>)
-
-### 8.2 Unsupported Types
-
-**MUST NOT** support:
-
+**Allowed with Caution:**
 ```java
-private Map<String, Object> metadata;      // Untyped Map - no generics
-private String[] tags;                     // Arrays not supported (use List)
-private int age;                           // Primitives not supported (use Integer)
-private custom.Collection<String> items;   // Custom collections not supported
-private Optional<String> value;            // Optionals not supported (use nullable)
+Map<String, String> properties;      // ✓ Typed map (String→String)
+Map<String, Integer> scores;         // ✓ Typed map (String→Integer)
 ```
 
-**CAN Support (with type constraints):**
+### Why It Matters
+
+- Compiler catches type errors
+- No runtime type surprises
+- No type coercion bugs
+- Performance optimizations possible
+
+### Implementation
+
+**With Jackson:**
 ```java
-private Map<String, String> properties;    // Typed Map - only if all values same type
-private Map<String, Integer> scores;       // Typed Map - explicit value type
+// ✓ Type-safe
+private List<String> tags;
+private Map<String, Integer> scores;
+
+// ✗ NOT allowed
+private Map<String, Object> metadata;
+private Object value;
 ```
 
-**Why?** 
-- Untyped `Object` loses type safety and breaks the manifesto's core promise
-- Use explicit typed classes instead of ambiguous Maps
-- If you need key-value storage, define a class with named fields
+**With Gson:**
+```java
+private List<String> tags;
+private TypeToken<Map<String, String>> mapType;
+```
+
+### Common Mistakes
+
+```java
+// ✗ WRONG - Untyped
+private Map<String, Object> data;
+private Object value;
+private List items;
+
+// ✓ CORRECT
+private Map<String, String> data;
+private String value;
+private List<String> items;
+```
 
 ---
 
 ## Rule 9: Nested Objects
 
-### 9.1 Requirements
+### Why This Rule Exists
 
-**MUST:** Nested objects MUST conform to these rules  
-**MUST:** Recursive validation applied to nested structures
+**Principle:** Nested objects follow same strictness rules.
 
+### The Rule
+
+- **MUST:** Nested objects conform to all rules
+- **MUST:** Recursive validation applied
+- **LIMIT:** Maximum 10 levels nesting depth
+
+**Valid:**
 ```java
-// ✓ CORRECT - Nested object follows all rules
 class OrderDTO {
     private String orderId;
-    private CustomerDTO customer;        // Valid nested DTO
-    private List<ProductDTO> items;      // Valid nested collection
+    private CustomerDTO customer;        // ✓ Valid DTO
+    private List<ProductDTO> items;      // ✓ Valid collection
 }
 
 class CustomerDTO {
     private String name;
     private String email;
-    private Address address;             // Can nest further
+    private AddressDTO address;          // ✓ Can nest further
 }
 ```
 
-### 9.2 Nesting Depth Limit
+### Why It Matters
 
-**MUST:** Maximum 10 levels of nesting  
-**ENFORCEMENT:** Compilation error or runtime error if exceeded
+- Consistent validation everywhere
+- No "escape hatches" for complex data
+- Forces clear structure
+- Prevents deeply nested mess
 
-```
-Level 1 -> Level 2 -> ... -> Level 10: ✓ OK
-Level 1 -> Level 2 -> ... -> Level 11: ✗ ERROR
-```
+### Implementation
 
-This prevents accidental deep structures and performance issues.
-
-### 9.3 Circular Reference Prevention
-
-**MUST NOT:** Circular references allowed  
-**ENFORCEMENT:** Compilation error if detected
-
+**With Jackson:**
 ```java
-// ✗ FORBIDDEN - Circular reference
-class UserDTO {
-    private GroupDTO group;
-}
+@Valid  // Triggers nested validation
+private CustomerDTO customer;
 
-class GroupDTO {
-    private UserDTO owner;  // ERROR: Circular reference detected
-}
+private List<@Valid ProductDTO> items;
+```
+
+**From Scratch:**
+```
+Validation rules:
+- For each nested object: run all rules
+- Track depth, error if > 10
+- Recursively validate all levels
 ```
 
 ---
 
 ## Rule 10: Error Handling
 
-### 10.1 Fail Fast Philosophy
+### Why This Rule Exists
 
-**MUST:** Invalid data causes immediate exception  
-**MUST NOT:** Silent failures or data corruption
+**Principle:** Fail fast. Silent failures hide bugs.
 
-Error messages MUST include:
-- Field name
-- Line and column (if available)
-- Expected vs actual value
-- Helpful suggestion
+### The Rule
 
+- **MUST:** Invalid data causes immediate exception
+- **MUST NOT:** Silent failures or data corruption
+- **Error message MUST include:**
+  - Field name
+  - Line and column (if available)
+  - Expected vs actual value
+  - Helpful suggestion
+
+**Example Error:**
 ```
-✓ EXAMPLE ERROR
-Field 'age' at line 3, column 10: 
+Field 'age' at line 3, column 10:
   Expected Integer but got String "abc"
   Suggestion: Remove quotes from numeric values
+  Path: order.customer.age
 ```
 
-### 10.2 Error Categories
+### Why It Matters
 
-**Invalid Type:**
-```
-"age": "abc"  →  ERROR: Expected Integer, got String
-```
+- Bugs caught at boundary, not downstream
+- Clear error messages enable fast fixes
+- No wasted debugging time
+- No production surprises
 
-**Missing Required Field (strict mode):**
-```
-{} (missing "age")  →  ERROR: Required field 'age' is missing
-```
+### Implementation
 
-**Invalid Format:**
-```
-"date": "2024/12/25"  →  ERROR: Invalid date format. Use ISO 8601 UTC: 2024-12-25T14:30:00Z
-```
-
-**Depth Exceeded:**
-```
-Nesting Level 11  →  ERROR: Maximum nesting depth (10) exceeded
-```
-
-**Circular Reference:**
-```
-UserDTO -> GroupDTO -> UserDTO  →  COMPILATION ERROR: Circular reference detected
-```
-
-### 10.3 Error Recovery
-
-**MUST NOT:** Partial object creation on error  
-**MUST:** Entire deserialization fails or succeeds
-
+**With Jackson:**
 ```java
-// ✗ WRONG - Don't return partially initialized object
-// Object with null fields, missing required data, undefined state
+mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+mapper.configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true);
+// Fails loudly on errors
+```
 
-// ✓ CORRECT - All or nothing
-// Either complete valid object or exception thrown
+**From Scratch:**
+```
+Error strategy:
+1. Detect error immediately
+2. Include context: field, line, column
+3. Explain what expected vs what received
+4. Suggest fix
+5. Don't continue parsing
 ```
 
 ---
 
 ## Rule 11: Nesting Depth Limits
 
-### 11.1 Maximum Depth
+### Why This Rule Exists
 
-**LIMIT:** 10 levels maximum
+**Security & Performance:**
+- Stack overflow protection
+- DoS attack prevention
+- Encourages flat, maintainable schemas
 
+### The Rule
+
+- **LIMIT:** Maximum 10 levels deep
+- **ENFORCEMENT:** Compile-time (if possible) or runtime error
+- **Deeper:** Rejected with clear error
+
+**Nesting Example:**
 ```
-Level 1: Root object
-Level 2: First nested object
-...
-Level 10: Deepest allowed
-Level 11+: ERROR
+Level 1: {
+  Level 2: {
+    Level 3: {
+      ...
+      Level 10: {
+        value: "here"  // ✓ OK
+      }
+    }
+  }
+}
+
+Level 11: { ... }  // ✗ ERROR
 ```
 
-### 11.2 Rationale
+### Why It Matters
 
-- Prevents accidental deep structures
-- Encourages flatter, more maintainable schemas
-- Protects against DoS attacks (stack overflow)
-- Improves readability
+- Encourages flat, understandable schemas
+- Prevents accidental deep nesting
+- Stack protection
+- Forces API design clarity
 
-### 11.3 Enforcement
+### Implementation
 
-**MUST:** Check at:
-- Compile time (if possible)
-- Runtime deserialization (if compile-time not possible)
+**With Jackson:**
+```java
+// Custom deserializer to track depth
+class StrictJsonDeserializer extends StdDeserializer {
+    private int depth = 0;
+    
+    public T deserialize(...) {
+        if (depth > 10) {
+            throw new ValidationException("Max nesting depth exceeded");
+        }
+        depth++;
+        try {
+            // deserialize
+        } finally {
+            depth--;
+        }
+    }
+}
+```
+
+**From Scratch:**
+```
+Tracking:
+- Increment depth on object start
+- Decrement on object end
+- Throw error if depth > 10
+```
 
 ---
 
-## Rule 12: Circular References
+## Rule 12: Circular References & Bidirectional Relationships
 
-### 12.1 Why Circular References Are Forbidden
+### Why This Rule Exists
 
-**Critical Issues:**
+**The Real Problem:** Infinite recursion, not relationships
 
-1. **Infinite Recursion** — Deserialization never terminates
-   ```
-   Parse A → Parse B (part of A) → Parse A (part of B) → Parse B → ...
-   ```
+**Distinction:**
+- **Bidirectional DAG (allowed):** User → Group → Users (no cycle to root)
+- **Circular reference (forbidden):** User → Group → Users → User (cycles to root)
 
-2. **Stack Overflow** — Each recursion level consumes stack memory
-   ```
-   Level 1: A references B (stack: 1 KB)
-   Level 2: B references A (stack: 2 KB)
-   Level 3: A references B (stack: 3 KB)
-   ... until stack exhausted → Exception
-   ```
+**Real incidents:**
+- Naive JSON serialization of ORM entities → infinite loop → stack overflow
+- Client can't deserialize because entity has cycles
+- API returns 500 error on valid request
 
-3. **Memory Explosion** — Objects never garbage collected
-   ```
-   Object A holds B, B holds A
-   Both always referenced = memory leak
-   ```
+### The Rule
 
-4. **JSON Representation Problem** — Impossible to represent in JSON
-   ```json
-   {"a": {"b": {"a": {"b": {...}}}}}  // Infinite nesting
-   ```
+**What's FORBIDDEN:**
+- Circular references: A → B → A (actual cycle)
+- Infinite recursion during serialization/deserialization
 
-5. **DoS Attack Vector** — Malicious JSON could crash system
-   ```json
-   {"user": {"group": {"owner": {"group": {...}}}}}
-   Attacker sends infinite circular structure
-   ```
+**What's ALLOWED:**
+- Bidirectional relationships: User ← many-to-many → Group (no cycles if DAG)
+- One-way references
 
-### 12.2 Detection
-
-**MUST:** Detect before processing
+**Examples:**
 
 ```java
-// ✗ FORBIDDEN
-class A { B b; }
-class B { A a; }
+// ✗ FORBIDDEN - Cycle exists
+class User {
+    String id;
+    Group group;
+}
 
-// Error during compilation or initialization:
-// "Circular reference detected: A -> B -> A"
+class Group {
+    String id;
+    User owner;  // Creates: User → Group → User (cycle)
+}
+
+// ✓ ALLOWED - DAG (Directed Acyclic Graph)
+class User {
+    String id;
+    String name;
+    Group group;  // User → Group
+}
+
+class Group {
+    String id;
+    String name;
+    List<String> memberIds;  // Group → IDs, not back to User
+}
+
+// ✓ ALSO ALLOWED - With proper depth limit
+class User {
+    String id;
+    String name;
+    Group group;
+}
+
+class Group {
+    String id;
+    String name;
+    @JsonIgnore      // Or: @JsonBackReference
+    List<User> members;  // Prevents serialization cycle
+}
 ```
 
-### 12.3 Prevention
+### Three Strategies for Relationships
 
-**MUST NOT:** Allow any circular structure
-
-**Common mistakes:**
-- Bidirectional relationships (user ↔ group)
-- Self-references (node → parent node → ...)
-- Indirect cycles (A → B → C → A)
-
-### 12.4 Alternative
-
-If bidirectional data needed, use separate structures:
+#### Strategy 1: IDs Only (Recommended for JSON APIs)
+**Use when:** REST APIs, microservices, external communication
 
 ```java
-// ✓ CORRECT - No cycles
+// User → Group reference
+class User {
+    String id;
+    String name;
+    String groupId;          // Just ID
+}
+
+// Group with member IDs
+class Group {
+    String id;
+    String name;
+    List<String> memberIds;  // Just IDs
+}
+
+// Benefits:
+// - Flat JSON, no cycles
+// - Client fetches what it needs
+// - Reduces payload size
+```
+
+#### Strategy 2: DTOs for Public APIs (Recommended for strict JSON)
+**Use when:** Public APIs, external APIs, when you want strict types
+
+```java
+// Internal entity (with cycles OK for ORM)
+@Entity
+class UserEntity {
+    @ManyToOne
+    Group group;
+    // ...
+}
+
+@Entity
+class GroupEntity {
+    @OneToMany
+    List<UserEntity> members;
+}
+
+// Public DTO (strict, acyclic)
 class UserDTO {
-    private String id;
-    private String name;
-    private String groupId;    // ID reference, not object
+    String id;
+    String name;
+    String groupId;  // Reference, not object
 }
 
 class GroupDTO {
-    private String id;
-    private String name;
-    // Don't include List<UserDTO> members
+    String id;
+    String name;
+    List<String> memberIds;
+}
+
+// Conversion layer
+UserDTO toDTO(UserEntity entity) {
+    return new UserDTO(
+        entity.getId(),
+        entity.getName(),
+        entity.getGroup().getId()
+    );
+}
+```
+
+#### Strategy 3: Bidirectional with Annotations (For ORM+JSON)
+**Use when:** JPA/Hibernate + JSON serialization needed
+
+```java
+@Entity
+class User {
+    String id;
+    
+    @ManyToOne
+    Group group;  // User → Group
+}
+
+@Entity
+class Group {
+    String id;
+    
+    @OneToMany(mappedBy = "group")
+    @JsonIgnore  // or @JsonBackReference
+    List<User> members;  // Prevents serialization cycle
+}
+
+// Benefits:
+// - Works with ORM
+// - Prevents infinite serialization
+// - Database relationships intact
+```
+
+### Why It Matters
+
+- **Infinite recursion** prevented at serialization level
+- **Stack overflow** cannot happen
+- **Clear semantics:** Which direction can navigate?
+- **Performance:** No redundant data in JSON
+
+### Implementation
+
+**With Jackson:**
+```java
+// Strategy 1: IDs only
+private String groupId;  // Not: private Group group;
+
+// Strategy 2: Use DTOs
+private UserDTO {
+    String groupId;
+}
+
+// Strategy 3: Annotations
+@ManyToOne
+private Group group;
+
+@OneToMany
+@JsonIgnore  // Prevent cycle
+private List<User> members;
+
+// or use @JsonBackReference / @JsonManagedReference
+@ManyToOne
+@JsonBackReference
+private Group group;
+
+@OneToMany(mappedBy = "group")
+@JsonManagedReference
+private List<User> members;
+```
+
+**With Gson:**
+```java
+// Strategy 1: IDs only (recommended)
+private String groupId;
+
+// Strategy 3: Custom serializer to break cycle
+class GroupSerializer implements JsonSerializer<Group> {
+    public JsonElement serialize(Group group, ...) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("id", group.getId());
+        obj.addProperty("name", group.getName());
+        // Don't serialize members (prevents cycle)
+        return obj;
+    }
+}
+```
+
+### When to Use Each Strategy
+
+| Strategy | Use Case | Pros | Cons |
+|----------|----------|------|------|
+| IDs Only | REST APIs, microservices | Flat, strict, no cycles | Extra requests needed |
+| DTOs | Public APIs, external | Type-safe, strict | Conversion layer |
+| Annotations | Internal, ORM+JSON | Works with Hibernate | Need Jackson config |
+
+### Common Mistakes
+
+```java
+// ✗ WRONG - Infinite recursion
+@Entity
+class User {
+    @ManyToOne
+    Group group;
+}
+
+@Entity  
+class Group {
+    @OneToMany
+    List<User> members;  // BOTH sides serialized = cycle
+}
+
+UserDTO user = new UserDTO(entity);  // Stack overflow
+
+// ✓ CORRECT - Use one of the three strategies above
+```
+
+### For Strict JSON Deserialization
+
+If receiving circular data from external source (shouldn't happen with strict JSON):
+```java
+// Adapter layer detects and converts
+{
+    "id": "user1",
+    "name": "John",
+    "group": {
+        "id": "group1",
+        "name": "Admins"
+        // No "members" field = no cycle
+    }
 }
 ```
 
@@ -845,450 +1178,246 @@ class GroupDTO {
 
 ## Rule 13: Security
 
-### 13.1 No Polymorphic Typing
+### Why This Rule Exists
 
-**MUST NOT:** Support `Object` or polymorphic type loading  
-**MUST NOT:** Allow arbitrary class instantiation
+**Production Incidents:**
+- CVE-2017-9424 (Jackson): RCE via enableDefaultTyping()
+- CVE-2017-9785 (Genson): RCE
+- CVE-2022-25647 (Gson): DoS via unbounded parsing
+
+### The Rules
+
+#### 13.1 No Polymorphic Typing
+- **MUST NOT:** Support `Object` type
+- **MUST NOT:** Allow arbitrary class instantiation
+- **RESULT:** No RCE vectors
 
 ```java
 // ✗ FORBIDDEN
-mapper.readValue(json, Object.class);      // NO
-mapper.readValue(json, Unknown.class);     // NO
-mapper.enableDefaultTyping();              // NO
+mapper.readValue(json, Object.class);
+mapper.enableDefaultTyping();
+
+// ✓ CORRECT
+mapper.readValue(json, UserDTO.class);  // Specific type
 ```
 
-### 13.2 No Reflection for Field Access
+#### 13.2 Reflection Usage: Generated Code Preferred
+- **SHOULD NOT:** Use reflection for field access (prefer generated code)
+- **ACCEPTABLE:** Jackson/Gson reflection usage (they optimize well)
+- **ACCEPTABLE:** JPA/Hibernate reflection (necessary for ORM)
+- **GOAL:** Minimize reflection in deserialization path where possible
+- **RESULT:** Better performance, GraalVM compatibility, predictability
 
-**MUST:** Use generated code only  
-**MUST NOT:** Runtime reflection on fields
+**Rationale:**
+Reflection isn't inherently bad, but generated code is better when possible. Jackson and Gson are well-optimized and use reflection efficiently. JPA/Hibernate require reflection by design. The principle is: prefer generated code in your deserialization layer, accept reflection where frameworks require it.
 
 ```java
-// ✓ CORRECT
-generated_code.setField(dto, value);
-
-// ✗ WRONG
+// ✗ AVOID in custom code
 Field field = clazz.getDeclaredField("name");
-field.setAccessible(true);
-field.set(dto, value);
+field.set(object, value);
+
+// ✓ ACCEPTABLE - Jackson handles reflection internally
+ObjectMapper mapper = new ObjectMapper();  // Uses reflection optimally
+
+// ✓ ACCEPTABLE - JPA/Hibernate requires reflection
+@Entity
+class User {
+    private String name;
+    // Hibernate uses reflection to set fields
+}
+
+// ✓ BEST - Generate code for your own deserialization
+// (if building custom tool from scratch)
+public class UserDTODeserializer {
+    public UserDTO deserialize(String json) {
+        // No reflection: direct field assignment
+        UserDTO dto = new UserDTO();
+        dto.setName(jsonObject.getString("name"));
+        return dto;
+    }
+}
 ```
 
-### 13.3 Why Input Size Limits Are Required
+#### 13.3 Input Size Limits
+- **MUST:** Enforce maximum JSON size (recommend 10 MB)
+- **MUST:** Enforce maximum array elements (recommend 10,000)
+- **MUST:** Enforce maximum string length (recommend 1 MB)
 
-**Critical Security & Performance Reasons:**
+**Why:** Prevents DoS attacks, memory exhaustion
 
-**1. DoS (Denial of Service) Attack Prevention**
-   ```
-   Attacker sends:
-   - Unbounded JSON file → Memory exhaustion → System crash
-   - Array with unlimited elements → Processing hangs → Service unavailable
-   - Deeply nested structure (no limit) → Stack overflow
-   
-   Result: Legitimate users can't access service
-   ```
+### Implementation
 
-**2. Memory Exhaustion**
-   ```
-   Without limit:
-   {"data": [... unlimited items ...]}
-   
-   System tries to allocate arbitrary memory:
-   - Kills other processes
-   - GC pressure increases
-   - OOM errors cascade
-   ```
+**With Jackson:**
+```java
+mapper.getFactory().setStreamReadConstraints(
+    StreamReadConstraints.builder()
+        .maxStringLength(1_000_000)
+        .maxNestingDepth(100)
+        .build()
+);
 
-**3. Stack Overflow Prevention**
-   ```
-   Unlimited nesting:
-   {"a": {"b": {"c": ... {"z": {"value": 1}}}}}
-   
-   Each level adds to call stack
-   Stack exhausted = JVM crash
-   ```
-
-**4. CPU Exhaustion**
-   ```
-   Large payloads:
-   String parsing, validation, copying
-   CPU spikes to 100%
-   Legitimate requests starved
-   ```
-
-**5. Malicious Payload Protection**
-   ```
-   Attacker intentionally sends oversized data
-   Without limits: System easily exploitable
-   With limits: Attack fails fast with clear error
-   ```
-
-### 13.4 Recommended Default Limits
-
-**MUST Enforce These:**
-
-| Limit | Value | Rationale |
-|-------|-------|-----------|
-| Max JSON size | **10 MB** | Prevents memory exhaustion, handles realistic bulk operations |
-| Max array size | **10,000 elements** | Encourages pagination, prevents spike |
-| Max string length | **1 MB** | Most text fields stay under this, catches bombs |
-| Max nesting depth | **10 levels** | Prevents stack overflow, enforces flat design |
-
-### 13.5 When These Limits Are Exceeded: Design Problem
-
-If you regularly hit these limits, there's an architectural issue:
-
-**String exceeds 1 MB:**
-```
-❌ Wrong: Storing 50MB text in JSON field
-{"document": "very long content..."}
-
-✓ Correct: Use file upload/storage
-POST /documents (multipart/form-data)
-Store in S3, Google Cloud Storage, or file system
-Return URL reference in JSON: {"documentUrl": "..."}
+// For input validation:
+if (json.length() > 10_000_000) {
+    throw new PayloadTooLargeException();
+}
 ```
 
-**Array exceeds 10,000 elements:**
+**From Scratch:**
 ```
-❌ Wrong: Return all results at once
-GET /users → Returns 1 million users
-
-✓ Correct: Implement pagination
-GET /users?page=1&limit=100&offset=0
-
-✓ Correct: Add filtering
-GET /users?status=active&created_after=2024-01-01
-
-✓ Correct: Use cursors
-GET /users?cursor=abc123&limit=100
+Security checklist:
+1. Type: Enforce specific types only
+2. Reflection: Use generated code, no reflection
+3. Size: Validate JSON size < 10MB
+4. Array: Validate array elements < 10,000
+5. String: Validate string length < 1MB
+6. Nesting: Validate depth < 10 levels
 ```
-
-**JSON exceeds 10 MB:**
-```
-❌ Wrong: Send entire bulk export as one payload
-POST /sync {"data": [... all 500MB records ...]}
-
-✓ Correct: Use batching
-POST /sync/batch?number=1 (10MB chunk)
-POST /sync/batch?number=2 (next 10MB)
-
-✓ Correct: Use streaming protocol
-gRPC with streaming
-Server-Sent Events (SSE)
-WebSocket with message chunks
-```
-
-**The Principle:** If legitimate business requires exceeding these limits, it's a signal that JSON might not be the right protocol. Consider file uploads, streaming, or alternative designs.
-
-### 13.6 Configuration Per Environment
-
-Implementations SHOULD allow configuration:
-
-```
-Development:
-  max_json_size: 100 MB  (loose for testing)
-  max_array_size: 1,000,000 (flexible)
-
-Staging:
-  max_json_size: 50 MB
-  max_array_size: 100,000
-
-Production:
-  max_json_size: 10 MB
-  max_array_size: 10,000
-  max_string_length: 1 MB
-  max_nesting_depth: 10
-```
-
-### 13.7 Error Messages for Size Violations
-
-When limit exceeded, fail fast with actionable error:
-
-```
-✓ GOOD ERROR
-"Request rejected: JSON payload 45MB exceeds 10MB limit (400 Bad Request)
-
-Reasons this happened:
-- Sending too many records at once
-- Including large file as base64 in JSON
-- Missing pagination in API design
-
-Solutions:
-1. Paginate results: GET /data?page=1&limit=100
-2. Filter results: GET /data?status=active&date_range=7d
-3. Use file upload: POST /files (multipart/form-data)
-4. Split into multiple requests with cursor pagination
-
-Documentation: https://api.example.com/pagination-guide"
-
-✗ BAD ERROR
-"413 Payload Too Large"
-"Error processing request"
-```
-
-### 13.8 No Dynamic Code Generation
-
-**MUST NOT:** Runtime code generation  
-**MUST NOT:** eval() or similar  
-**MUST:** All code paths compile-time determined
 
 ---
 
 ## Rule 14: Performance
 
-### 14.1 Zero Reflection
+### Why This Rule Exists
 
-**MUST:** Generated code only  
-**MUST NOT:** Reflection at deserialization time
+**Principle:** Strict rules enable performance optimizations.
 
+### The Rules
+
+#### 14.1 Zero Reflection
+- **MUST:** Generated code only
+- **RESULT:** No runtime overhead
+- **Benefit:** Predictable performance, GraalVM compatible
+
+#### 14.2 Minimal Allocations
+- **MINIMIZE:** Object creation
+- **CACHE:** Reuse where possible
+- **BENEFIT:** Lower GC pressure
+
+#### 14.3 Switch-Case Optimization
+- **PREFER:** Switch statements for field mapping (O(1) lookup)
+- **AVOID:** Linear search or HashMap lookup
+
+**Example:**
 ```java
-// ✓ CORRECT - Direct field assignment
-dto.setName(parser.getString());
-dto.setAge(parser.getInt());
-
-// ✗ WRONG - Reflection
-Field field = clazz.getDeclaredField("name");
-field.set(dto, value);
-```
-
-### 14.2 Minimal Allocations
-
-**MUST:** Minimize object creation  
-**SHOULD:** Cache string constants, reuse where possible
-
-```java
-// ✓ PREFERRED
-private static final String FIELD_NAME = "name";
-int age = parser.getInt();  // Primitive, not boxed
-
-// ✗ AVOID
-Integer age = Integer.valueOf(parser.getInt());  // Unnecessary boxing
-```
-
-### 14.3 Switch-Case Optimization
-
-**SHOULD:** Use switch-case for field mapping when possible
-
-```java
-// ✓ FAST - Switch statement for O(1) lookup
+// ✓ FAST - Switch statement
 switch (fieldName) {
-    case "name" -> dto.setName(parser.getString());
-    case "age" -> dto.setAge(parser.getInt());
-    case "email" -> dto.setEmail(parser.getString());
-    default -> parser.skipValue();
+    case "name" -> dto.setName(...);
+    case "age" -> dto.setAge(...);
+    case "email" -> dto.setEmail(...);
+    default -> skip();
 }
 
-// ✗ SLOWER - Linear search
-if ("name".equals(fieldName)) { ... }
-else if ("age".equals(fieldName)) { ... }
-// or
-fieldHandlers.get(fieldName).handle(value);  // Map lookup
+// ✗ SLOWER - HashMap
+fieldHandlers.get(fieldName).handle(value);
+```
+
+### Implementation
+
+**With Jackson:**
+- Generated code via annotation processors
+- Reflection minimized via generated code paths
+
+**From Scratch:**
+```
+Performance rules:
+1. Generate code at compile time
+2. Use switch statements for field lookup
+3. Minimize object allocation
+4. Cache string constants
+5. Profile and benchmark
 ```
 
 ---
 
 ## Rule 15: JSON Compliance
 
-### 15.1 RFC 8259 Compliance
+### Why This Rule Exists
 
-**MUST:** Strict JSON standard compliance  
-**MUST NOT:** JSON extensions
+**Principle:** Strict RFC 8259 compliance ensures interoperability.
 
-```json
-✓ VALID - RFC 8259 compliant
-{
-  "name": "John",
-  "age": 25,
-  "active": true,
-  "tags": ["a", "b"]
-}
+### The Rules
 
-✗ INVALID - Non-standard
-{
-  "name": "John",        // Comments not allowed
-  "age": 25,            // Trailing comma not allowed (in object)
-  unquoted: "value"     // Unquoted keys not allowed
-}
-```
+#### 15.1 RFC 8259 Compliance
+- **MUST:** Strict JSON only (no JSON5, JSONC, etc.)
+- **NO:** Comments
+- **NO:** Trailing commas
+- **NO:** Unquoted keys
+- **NO:** Single quotes
 
-### 15.2 Character Encoding
-
-**MUST:** UTF-8 encoding required  
-**MUST:** Proper Unicode handling
+#### 15.2 Character Encoding
+- **MUST:** UTF-8 encoding required
+- **MUST:** Proper Unicode handling
+- **VALID:** Direct UTF-8 or Unicode escapes
 
 ```json
 {
-  "direct": "José María",                    // Direct UTF-8 OK
-  "escaped": "\u0048\u0065\u006C\u006C\u006F"  // Unicode escapes OK
+  "direct": "José María",
+  "escaped": "\u0048\u0065\u006C\u006C\u006F"
 }
 ```
 
-### 15.3 Number Representation
+#### 15.3 Number Representation
+- **MUST:** Support language numeric types
+- **NO:** Scientific notation
 
-**MUST:** Support JSON number format  
-**Range:** Full range of language numeric types
+#### 15.4 String Escaping
+- **MUST:** Handle all JSON escape sequences
+  - `\"` → quote
+  - `\\` → backslash
+  - `\n` → newline
+  - `\t` → tab
+  - `\uXXXX` → Unicode
 
-```json
-{
-  "int": 123,
-  "large": 9007199254740991,           // JavaScript MAX_SAFE_INTEGER
-  "decimal": 123.456,
-  "negative": -123
-}
-```
+### Implementation
 
-### 15.4 String Escaping
-
-**MUST:** Handle all JSON escape sequences
-
-```
-\" → "
-\\ → \
-\/ → /
-\b → backspace
-\f → form feed
-\n → newline
-\r → carriage return
-\t → tab
-\uXXXX → Unicode
-```
-
----
-
-## Rule 16: Data Transmission Format
-
-### 16.1 Compact JSON Required
-
-**MUST:** JSON MUST be transmitted in compact format (no whitespace)  
-**MUST NOT:** Beautified/formatted JSON in production
-
-```
-✓ CORRECT (Compact - Production)
-{"name":"John","age":25,"email":"john@example.com","active":true}
-
-✗ WRONG (Beautified - Never use in production)
-{
-  "name": "John",
-  "age": 25,
-  "email": "john@example.com",
-  "active": true
-}
-```
-
-### 16.2 Why Compact Format
-
-**Performance Benefits:**
-- Reduced payload size (typically 20-30% smaller)
-- Faster network transmission
-- Lower bandwidth costs
-- Reduced latency
-- Less memory during parsing
-
-**Example Size Comparison:**
-```
-Beautified: 157 bytes
-Compact:    102 bytes
-Savings:    55 bytes (35% reduction)
-
-Over 1 million requests:
-Beautified: 157 MB
-Compact:    102 MB
-Savings:    55 MB bandwidth saved
-```
-
-**Security Benefits:**
-- Harder for attacker to analyze payload
-- Slightly reduces attack surface visibility
-- No whitespace parsing edge cases
-
-### 16.3 Guidelines
-
-**MUST:**
-- Remove all unnecessary whitespace
-- No spaces after `:` or `,`
-- No newlines or indentation
-- No comments
-
-**MUST NOT:**
-- Beautify JSON for transmission
-- Add debugging information
-- Include format version markers
-- Add extra fields for readability
-
-### 16.4 Development vs Production
-
-**During Development:**
-- Use beautified JSON for debugging
-- Enable pretty-printing in logs
-- Use formatters in IDE for readability
-
-**Before Transmission:**
-- Minify to compact format
-- Remove all whitespace
-- Validate format
-
-**Tools:**
-```
-Java: ObjectMapper with compact formatter
-JavaScript: JSON.stringify(obj) — already compact
-Go: json.Marshal — already compact
-Kotlin: kotlinx.serialization — already compact
-```
-
-### 16.5 Documentation & Testing
-
-When documenting API responses, ALWAYS show both:
-
-**In Documentation (for readability):**
-```json
-{
-  "id": 123,
-  "name": "John",
-  "email": "john@example.com"
-}
-```
-
-**In Wire Protocol (actual transmission):**
-```json
-{"id":123,"name":"John","email":"john@example.com"}
-```
-
-**In Tests:**
+**With Jackson:**
 ```java
-String compact = "{\"id\":123,\"name\":\"John\",\"email\":\"john@example.com\"}";
-// NOT beautified for actual transmission tests
+ObjectMapper mapper = new ObjectMapper();
+// Natively compliant with RFC 8259
+```
+
+**From Scratch:**
+```
+Compliance checklist:
+1. Parse only valid RFC 8259
+2. UTF-8 required
+3. Handle escape sequences
+4. No non-standard extensions
+5. Validate all inputs
 ```
 
 ---
 
-## Verification Checklist
+## Summary: Implementation Checklist
 
-When implementing according to Strict JSON principles, verify:
+When building a tool following Strict JSON principles:
 
-- [ ] Numeric values unquoted in JSON, wrapper types in code
-- [ ] Booleans unquoted true/false only
-- [ ] Strings preserved exactly (no trimming/normalization)
-- [ ] Arrays explicitly declared
-- [ ] Null values forbidden in JSON (omit instead)
-- [ ] Dates ISO 8601 UTC only
-- [ ] Field mapping exact or explicitly custom
-- [ ] Types limited to specified set
-- [ ] Nested objects follow same rules
-- [ ] Max 10 level nesting depth enforced
-- [ ] Circular references prevented
-- [ ] Fail fast on errors, clear messages
-- [ ] No polymorphic type loading
-- [ ] Generated code, no runtime reflection
-- [ ] Input size limits enforced
-- [ ] RFC 8259 compliant
-- [ ] UTF-8 support
-- [ ] Performance: no reflection, minimal allocations
+- [ ] Rule 1: Numeric unquoted, wrapper types
+- [ ] Rule 2: Boolean unquoted true/false only
+- [ ] Rule 3: Strings preserved exactly
+- [ ] Rule 4: Arrays explicitly typed
+- [ ] Rule 5: Null/missing explicit, consistent pattern
+- [ ] Rule 6: Dates ISO 8601 UTC only
+- [ ] Rule 7: Field mapping exact or explicitly custom
+- [ ] Rule 8: Types from approved set only
+- [ ] Rule 9: Nested objects follow same rules
+- [ ] Rule 10: Fail fast, clear errors
+- [ ] Rule 11: Nesting depth max 10 levels
+- [ ] Rule 12: Circular references prevented
+- [ ] Rule 13: Security (no polymorphism, no reflection, size limits)
+- [ ] Rule 14: Performance (generated code, minimal allocations)
+- [ ] Rule 15: RFC 8259 compliant
 
 ---
 
 ## Questions?
 
-These rules may be strict, but they're designed to catch errors early and make deserialization predictable and safe.
+These rules are strict by design, but pragmatism matters. If a rule seems too restrictive:
 
-If you're implementing a tool following these rules, we'd love to hear from you. Open an issue or pull request.
+1. **For new projects:** Follow strictly
+2. **For existing projects:** Apply via configuration + adapter layer
+3. **For hybrid needs:** Mix strict internals with flexible boundaries
 
-If a rule seems too restrictive for your use case, open an issue and discuss. But the bar for changing rules is high — they need to solve real problems for the 99%, not edge cases for the 1%.
+If you have production incidents that would be prevented by these rules, open an issue. We'll discuss and learn together.
+
+The goal isn't perfection. It's reliability.
